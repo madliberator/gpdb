@@ -841,12 +841,12 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 				 */
 				if (scan_node_counter >= MAX_SCAN_ON_SHMEM)
 				{
-					result->instrument = InstrAlloc(1);
+					result->instrument = InstrAlloc(1, estate->es_instrument);
 					break;
 				}
 				scan_node_counter++;
 			default:
-				result->instrument = InstrShmemPick(node, eflags);
+				result->instrument = InstrShmemPick(node, eflags, estate->es_instrument);
 		}
 	}
 
@@ -1048,7 +1048,7 @@ ExecProcNode(PlanState *node)
 		ExecReScan(node, NULL); /* let ReScan handle this */
 
 	if (node->instrument)
-		InstrStartNode(node->instrument);
+		INSTR_START_NODE(node->instrument);
 
 	if(!node->fHadSentGpmon)
 		CheckSendPlanStateGpmonPkt(node);
@@ -1238,7 +1238,7 @@ ExecProcNode(PlanState *node)
 	}
 
 	if (node->instrument)
-		InstrStopNode(node->instrument, TupIsNull(result) ? 0.0 : 1.0);
+		INSTR_STOP_NODE(node->instrument, TupIsNull(result) ? 0 : 1);
 
 	if (node->plan)
 		TRACE_POSTGRESQL_EXECPROCNODE_EXIT(Gp_segment, currentSliceId, nodeTag(node), node->plan->plan_node_id);
