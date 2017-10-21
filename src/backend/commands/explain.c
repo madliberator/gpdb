@@ -429,7 +429,7 @@ ExplainOnePlan(PlannedStmt *plannedstmt, ParamListInfo params,
 
 	/* Select execution options */
 	if (stmt->analyze)
-		eflags = 0;				/* default run-to-completion flags */
+		eflags = EXEC_FLAG_EXPLAIN_ANALYZE;		/* default run-to-completion flags */
 	else
 		eflags = EXEC_FLAG_EXPLAIN_ONLY;
 
