@@ -33,6 +33,7 @@
 #include "executor/spi.h"
 #include "postmaster/autostats.h"
 #include "postmaster/backoff.h"
+#include "utils/query_metrics.h"
 #include "utils/resscheduler.h"
 
 
@@ -245,6 +246,7 @@ ProcessQuery(Portal portal,
 				application_name,
 				GetResqueueName(portal->queueId),
 				GetResqueuePriority(portal->queueId));
+		metrics_send_query_info(queryDesc, METRICS_QUERY_SUBMIT);
 	}
 
 	queryDesc->plannedstmt->query_mem = ResourceManagerGetQueryMemoryLimit(queryDesc->plannedstmt);
@@ -650,6 +652,7 @@ PortalStart(Portal portal, ParamListInfo params, Snapshot snapshot,
 							application_name,
 							GetResqueueName(portal->queueId),
 							GetResqueuePriority(portal->queueId));
+					metrics_send_query_info(queryDesc, METRICS_QUERY_SUBMIT);
 				}
 
 				/* 
