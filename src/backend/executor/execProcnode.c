@@ -1852,9 +1852,6 @@ ExecEndNode(PlanState *node)
 	/* GPDB send query metrics packet for node finish */
 	UpdateNodeMetricsInfoPkt(node, METRICS_NODE_FINISHED);
 
-	if (node->instrument)
-		node->instrument = InstrShmemRecycle(node->instrument);
-
 	if (codegen)
 	{
 		/*
