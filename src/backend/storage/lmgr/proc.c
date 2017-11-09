@@ -44,6 +44,7 @@
 #include "miscadmin.h"
 #include "postmaster/autovacuum.h"
 #include "postmaster/fts.h"
+#include "postmaster/postmaster.h"
 #include "replication/syncrep.h"
 #include "replication/walsender.h"
 #include "storage/ipc.h"
@@ -179,6 +180,7 @@ InitProcGlobal(int mppLocalProcessCounter)
 	PGPROC	   *procs;
 	int			i;
 	bool		found;
+	int			numBgworkers;
 
 	/* Create the ProcGlobal shared structure */
 	ProcGlobal = (PROC_HDR *)
@@ -199,6 +201,7 @@ InitProcGlobal(int mppLocalProcessCounter)
 	 */
 	ProcGlobal->freeProcs = INVALID_OFFSET;
 	ProcGlobal->autovacFreeProcs = INVALID_OFFSET;
+	ProcGlobal->bgworkerFreeProcs = INVALID_OFFSET;
 
 	ProcGlobal->spins_per_delay = DEFAULT_SPINS_PER_DELAY;
 
@@ -236,6 +239,25 @@ InitProcGlobal(int mppLocalProcessCounter)
 		InitSharedLatch(&(procs[i].procLatch));
 		procs[i].links.next = ProcGlobal->autovacFreeProcs;
 		ProcGlobal->autovacFreeProcs = MAKE_OFFSET(&procs[i]);
+	}
+
+	numBgworkers = GetNumShmemAttachedBgworkers();
+	if (numBgworkers > 0)
+	{
+		procs = (PGPROC *) ShmemAlloc(numBgworkers * sizeof(PGPROC));
+		if (!procs)
+			ereport(FATAL,
+					(errcode(ERRCODE_OUT_OF_MEMORY),
+					 errmsg("out of shared memory")));
+		MemSet(procs, 0, numBgworkers * sizeof(PGPROC));
+		for (i = 0; i < numBgworkers; i++)
+		{
+			/* PGPROC for bgworker, add to bgworkerFreeProcs list */
+			PGSemaphoreCreate(&(procs[i].sem));
+			InitSharedLatch(&(procs[i].procLatch));
+			procs[i].links.next = ProcGlobal->bgworkerFreeProcs;
+			ProcGlobal->bgworkerFreeProcs = MAKE_OFFSET(&procs[i]);
+		}
 	}
 
 	MemSet(AuxiliaryProcs, 0, NUM_AUXILIARY_PROCS * sizeof(PGPROC));
@@ -300,6 +322,8 @@ InitProcess(void)
 
 	if (IsAutoVacuumWorkerProcess())
 		myOffset = procglobal->autovacFreeProcs;
+	else if (IsBackgroundWorker)
+		myOffset = procglobal->bgworkerFreeProcs;
 	else
 		myOffset = procglobal->freeProcs;
 
@@ -308,6 +332,8 @@ InitProcess(void)
 		MyProc = (PGPROC *) MAKE_PTR(myOffset);
 		if (IsAutoVacuumWorkerProcess())
 			procglobal->autovacFreeProcs = MyProc->links.next;
+		else if (IsBackgroundWorker)
+			procglobal->bgworkerFreeProcs = MyProc->links.next;
 		else
 			procglobal->freeProcs = MyProc->links.next;
 
@@ -806,6 +832,11 @@ ProcKill(int code, Datum arg)
 	{
 		proc->links.next = procglobal->autovacFreeProcs;
 		procglobal->autovacFreeProcs = MAKE_OFFSET(proc);
+	}
+	else if (IsBackgroundWorker)
+	{
+		MyProc->links.next = procglobal->bgworkerFreeProcs;
+		procglobal->bgworkerFreeProcs = MAKE_OFFSET(proc);
 	}
 	else
 	{

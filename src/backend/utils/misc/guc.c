@@ -53,6 +53,7 @@
 #include "parser/scansup.h"
 #include "pgstat.h"
 #include "postmaster/autovacuum.h"
+#include "postmaster/bgworker.h"
 #include "postmaster/bgwriter.h"
 #include "postmaster/postmaster.h"
 #include "postmaster/syslogger.h"
@@ -8298,11 +8299,11 @@ show_allow_system_table_mods(void)
 static bool
 assign_maxconnections(int newval, bool doit, GucSource source)
 {
-	if (newval + autovacuum_max_workers > INT_MAX / 4)
+	if (newval + autovacuum_max_workers + GetNumShmemAttachedBgworkers() > INT_MAX / 4)
 		return false;
 
 	if (doit)
-		MaxBackends = newval + autovacuum_max_workers;
+		MaxBackends = newval + autovacuum_max_workers + GetNumShmemAttachedBgworkers();
 
 	return true;
 }
@@ -8310,11 +8311,11 @@ assign_maxconnections(int newval, bool doit, GucSource source)
 static bool
 assign_autovacuum_max_workers(int newval, bool doit, GucSource source)
 {
-	if (newval + MaxConnections > INT_MAX / 4)
+	if (newval + MaxConnections + GetNumShmemAttachedBgworkers() > INT_MAX / 4)
 		return false;
 
 	if (doit)
-		MaxBackends = newval + MaxConnections;
+		MaxBackends = newval + MaxConnections + GetNumShmemAttachedBgworkers();
 
 	return true;
 }
